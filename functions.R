@@ -411,84 +411,83 @@ BICTree <- function(treeInfo, lambda1, lambda2, k1, k2, nbranch,N){
     if(branch<nbranch){
       ind <- which((!is.na(treeInfo[[branch]][["Info"]]$n) & (treeInfo[[branch]][["Info"]]$stop==TRUE)))
     }
-    node.prev <- treeInfo[[branch]][["Info"]]$node_prev[ind]
-    n.subdat <- length(ind)
-    for(subdat.ind in ind){
-      subdat <- treeInfo[[branch]][["dat"]][[subdat.ind]]
-      split.var <- treeInfo[[branch]][["Info"]]$split_var[subdat.ind]
-      split.at <- treeInfo[[branch]][["Info"]]$split_at[subdat.ind]
-      beta0 <- treeInfo[[branch]][["Info"]]$beta0[subdat.ind]
-      beta1 <- treeInfo[[branch]][["Info"]]$beta1[subdat.ind]
-      if(treeInfo[[branch]][["Info"]]$sign[subdat.ind]=="le"){
-        pi1 <- 1 / (1+exp(beta0+beta1))
-        pi2 <- exp(beta0+beta1) / (1+exp(beta0+beta1))
+    if(length(ind)>0){
+      node.prev <- treeInfo[[branch]][["Info"]]$node_prev[ind]
+      n.subdat <- length(ind)
+      for(subdat.ind in ind){
+        subdat <- treeInfo[[branch]][["dat"]][[subdat.ind]]
+        split.var <- treeInfo[[branch]][["Info"]]$split_var[subdat.ind]
+        split.at <- treeInfo[[branch]][["Info"]]$split_at[subdat.ind]
+        beta0 <- treeInfo[[branch]][["Info"]]$beta0[subdat.ind]
+        beta1 <- treeInfo[[branch]][["Info"]]$beta1[subdat.ind]
+        if(treeInfo[[branch]][["Info"]]$sign[subdat.ind]=="le"){
+          pi1 <- 1 / (1+exp(beta0+ifelse(is.na(beta1),0,beta1)))
+          pi2 <- exp(beta0+ifelse(is.na(beta1),0,beta1)) / (1+exp(beta0+ifelse(is.na(beta1),0,beta1)))# dealing with singularity issue in logistic regression
+        }
+        if(treeInfo[[branch]][["Info"]]$sign[subdat.ind]=="ge"){
+          pi1 <- 1 / (1+exp(beta0))
+          pi2 <- exp(beta0) / (1+exp(beta0))
+        }
+        y <- subdat$y; delta <- subdat$delta
+        lambda1=treeInfo[[branch]][["survEst"]]$lambda1;lambda2=treeInfo[[branch]][["survEst"]]$lambda2
+        k1=treeInfo[[branch]][["survEst"]]$k1;k2=treeInfo[[branch]][["survEst"]]$k2
+        S1 <- exp(-(y/lambda1)^k1)
+        S2 <- exp(-(y/lambda2)^k2)
+        f1 <- k1*lambda1^(-k1)*y^(k1-1)*exp(-(y/lambda1)^k1)
+        f2 <- k2*lambda2^(-k2)*y^(k2-1)*exp(-(y/lambda2)^k2)
+        obs.loglik.curr <- sum(delta * log(f1*pi1 + f2*pi2) + (1-delta) * log(S1*pi1 + S2*pi2))
+        obs.loglik <- c(obs.loglik,obs.loglik.curr)
+        n.obs <- c(n.obs,nrow(subdat))
       }
-      if(treeInfo[[branch]][["Info"]]$sign[subdat.ind]=="ge"){
-        pi1 <- 1 / (1+exp(beta0))
-        pi2 <- exp(beta0) / (1+exp(beta0))
-      }
-      y <- subdat$y; delta <- subdat$delta
-      S1 <- exp(-(y/lambda1)^k1)
-      S2 <- exp(-(y/lambda2)^k2)
-      f1 <- k1*lambda1^(-k1)*y^(k1-1)*exp(-(y/lambda1)^k1)
-      f2 <- k2*lambda2^(-k2)*y^(k2-1)*exp(-(y/lambda2)^k2)
-      obs.loglik.curr <- sum(delta * log(f1*pi1 + f2*pi2) + (1-delta) * log(S1*pi1 + S2*pi2))
-      obs.loglik <- c(obs.loglik,obs.loglik.curr)
-      n.obs <- c(n.obs,nrow(subdat))
     }
   }
   if(sum(n.obs)!=N){print("Sample Size is incorrect!")}
   n.leaves <- length(obs.loglik)
   BIC <- -2*sum(obs.loglik) + log(N)*(n.leaves+4)
-  
-  return(list(BIC=BIC,n.leaves=n.leaves))
+  BIC_levels <- -2*sum(obs.loglik) + log(N)*(nbranch+4)
+  return(list(BIC=BIC,n.leaves=n.leaves,obs.loglik = sum(obs.loglik), 
+              BIC_levels=BIC_levels))
 }
 
 PruneTree <- function(treeInfo,N){
   nbranch <- length(treeInfo)
-  BIC <- BICTree(treeInfo=treeInfo,lambda1=treeInfo[[nbranch]][["survEst"]]$lambda1,
-                 lambda2=treeInfo[[nbranch]][["survEst"]]$lambda2,
-                 k1=treeInfo[[nbranch]][["survEst"]]$k1,
-                 k2=treeInfo[[nbranch]][["survEst"]]$k2,nbranch=nbranch,N=N)$BIC
-  BIC.new <- BICTree(treeInfo=treeInfo,lambda1=treeInfo[[(nbranch-1)]][["survEst"]]$lambda1,
-                     lambda2=treeInfo[[(nbranch-1)]][["survEst"]]$lambda2,
-                     k1=treeInfo[[(nbranch-1)]][["survEst"]]$k1,
-                     k2=treeInfo[[(nbranch-1)]][["survEst"]]$k2,nbranch=nbranch-1,N=N)$BIC
-  while(BIC>BIC.new){
-    BIC <- BIC.new
-    nbranch <- nbranch-1
-    if(nbranch==1){
-      BIC.new <- BICTree(treeInfo=treeInfo,lambda1=treeInfo[[nbranch]][["survEst"]]$lambda1,
-                         lambda2=treeInfo[[nbranch]][["survEst"]]$lambda2,
-                         k1=treeInfo[[nbranch]][["survEst"]]$k1,
-                         k2=treeInfo[[nbranch]][["survEst"]]$k2,nbranch=nbranch,N=N)$BIC
-      BIC <- BIC.new
-    }
-    if(nbranch>1){
-      BIC.new <- BICTree(treeInfo=treeInfo,lambda1=treeInfo[[(nbranch-1)]][["survEst"]]$lambda1,
-                         lambda2=treeInfo[[(nbranch-1)]][["survEst"]]$lambda2,
-                         k1=treeInfo[[(nbranch-1)]][["survEst"]]$k1,
-                         k2=treeInfo[[(nbranch-1)]][["survEst"]]$k2,nbranch=nbranch-1,N=N)$BIC
-    }
+  BIC_v = NULL
+  for(branch in 1:nbranch){
+    BIC_cal <- BICTree(treeInfo=treeInfo,lambda1=treeInfo[[branch]][["survEst"]]$lambda1,
+                       lambda2=treeInfo[[branch]][["survEst"]]$lambda2,
+                       k1=treeInfo[[branch]][["survEst"]]$k1,
+                       k2=treeInfo[[branch]][["survEst"]]$k2,nbranch=branch,N=N)
+    BIC_v$BIC = c(BIC_v$BIC,BIC_cal$BIC)
+    BIC_v$BIC_levels = c(BIC_v$BIC_levels,BIC_cal$BIC_levels)
   }
-  return(list(branch.opt=nbranch,BIC=BIC))
+  branch.opt = NULL
+  branch.opt$BIC = which(BIC_v$BIC==min(BIC_v$BIC))
+  branch.opt$BIC_levels = which(BIC_v$BIC_levels==min(BIC_v$BIC_levels))
+  BIC.opt = NULL
+  BIC.opt$BIC = min(BIC_v$BIC)
+  BIC.opt$BIC_levels = min(BIC_v$BIC_levels)
+  return(list(branch.opt=branch.opt,BIC.opt=BIC.opt,BIC_v=BIC_v))
 }
 
 ##### function to test tree, calculate predicted class
-TestTree <- function(treeInfo,N,testDat,prune){
+TestTree <- function(treeInfo,N,testDat,prune,BIC_type){
   if(prune){
-    branch.opt <- PruneTree(treeInfo=treeInfo,N=N)$branch.opt
-    n.leaves <- BICTree(treeInfo=treeInfo,lambda1=treeInfo[[branch.opt]][["survEst"]]$lambda1,
+    branch.opt <- PruneTree(treeInfo=treeInfo,N=N)$branch.opt[[BIC_type]]
+    BIC_tree <- BICTree(treeInfo=treeInfo,lambda1=treeInfo[[branch.opt]][["survEst"]]$lambda1,
                         lambda2=treeInfo[[branch.opt]][["survEst"]]$lambda2,
                         k1=treeInfo[[branch.opt]][["survEst"]]$k1,
-                        k2=treeInfo[[branch.opt]][["survEst"]]$k2,nbranch=branch.opt,N=N)$n.leaves
+                        k2=treeInfo[[branch.opt]][["survEst"]]$k2,nbranch=branch.opt,N=N)
+    n.leaves = BIC_tree$n.leaves
+    BIC = BIC_tree$BIC; BIC_levels=BIC_tree$BIC_levels
   }
   if(!prune){
     branch.opt <- length(treeInfo)
-    n.leaves <- BICTree(treeInfo=treeInfo,lambda1=treeInfo[[branch.opt]][["survEst"]]$lambda1,
+    BIC_tree <- BICTree(treeInfo=treeInfo,lambda1=treeInfo[[branch.opt]][["survEst"]]$lambda1,
                         lambda2=treeInfo[[branch.opt]][["survEst"]]$lambda2,
                         k1=treeInfo[[branch.opt]][["survEst"]]$k1,
-                        k2=treeInfo[[branch.opt]][["survEst"]]$k2,nbranch=branch.opt,N=N)$n.leaves
+                        k2=treeInfo[[branch.opt]][["survEst"]]$k2,nbranch=branch.opt,N=N)
+    n.leaves = BIC_tree$n.leaves
+    BIC = BIC_tree$BIC; BIC_levels=BIC_tree$BIC_levels
   }
   
   # calculate predicted class
@@ -506,7 +505,7 @@ TestTree <- function(treeInfo,N,testDat,prune){
         beta0 <- treeInfo[[branch]][["Info"]]$beta0[subdat.ind]
         beta1 <- treeInfo[[branch]][["Info"]]$beta1[subdat.ind]
         if(treeInfo[[branch]][["Info"]]$sign[subdat.ind]=="le"){
-          subdat$pi1 <- 1 / (1+exp(beta0+ifelse(is.na(beta1),0,beta1)))
+          subdat$pi1 <- 1 / (1+exp(beta0+ifelse(is.na(beta1),0,beta1)))#@@ dealing with beta1=NA issue
           subdat$pi2 <- exp(beta0+ifelse(is.na(beta1),0,beta1)) / (1+exp(beta0+ifelse(is.na(beta1),0,beta1)))
         }
         if(treeInfo[[branch]][["Info"]]$sign[subdat.ind]=="ge"){
@@ -518,6 +517,7 @@ TestTree <- function(treeInfo,N,testDat,prune){
         } else {
           subdat$B.pred <- ifelse(subdat$pi1>subdat$pi2, 1,2)
         }
+        
         
         if(length(unique(subdat$B.pred))==1){
           Bhat <- unique(subdat$B.pred)
@@ -531,6 +531,7 @@ TestTree <- function(treeInfo,N,testDat,prune){
       }
     }
   }
+  
   
   # predict on testDat
   tDat.tree <- list()
@@ -566,5 +567,6 @@ TestTree <- function(treeInfo,N,testDat,prune){
     }
   }
   accuracy <- sum(tDat$B==tDat$Bpred)/nrow(tDat)
-  return(list(accuracy=accuracy,branch.opt=branch.opt, n.leaves=n.leaves,Bpred=tDat$Bpred,Btrue=tDat$B,tDat=tDat))
+  return(list(accuracy=accuracy,branch.opt=branch.opt,n.leaves=n.leaves,Bpred=tDat$Bpred,Btrue=tDat$B,
+              tDat=tDat,BIC=BIC,BIC_levels=BIC_levels))
 }
