@@ -27,11 +27,11 @@ tree <- growTree(X=train[,1:10],y=train$y,delta=train$delta,beta.ini=matrix(0,2,
 test <- genrDatwb_2g(N=10000,dx=dx,lambda1=lambda1,lambda2=lambda2,k1=k1,k2=k2,
                      expLambda=expLambda,true_beta=true_beta)
 
-testtree <- TestTree(treeInfo=tree$treeInfo,N=N,testDat=test,prune=TRUE)
+testtree <- TestTree(treeInfo=tree$treeInfo,N=N,testDat=test,prune=TRUE,BIC_type="BIC")
 testtree$accuracy
 table(testtree$tDat$B,testtree$tDat$Bpred)
 
-testtree_notprune <- TestTree(treeInfo=tree$treeInfo,N=N,testDat=test,prune=FALSE)
+testtree_notprune <- TestTree(treeInfo=tree$treeInfo,N=N,testDat=test,prune=TRUE,BIC_type="BIC")
 testtree_notprune$accuracy
 table(testtree_notprune$tDat$B,testtree_notprune$tDat$Bpred)
 
