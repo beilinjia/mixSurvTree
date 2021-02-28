@@ -439,7 +439,7 @@ BICTree <- function(treeInfo, lambda1, lambda2, k1, k2, nbranch,N){
   }
   if(sum(n.obs)!=N){print("Sample Size is incorrect!")}
   n.leaves <- length(obs.loglik)
-  BIC <- -2*sum(obs.loglik) + log(N)*n.leaves
+  BIC <- -2*sum(obs.loglik) + log(N)*(n.leaves+4)
   
   return(list(BIC=BIC,n.leaves=n.leaves))
 }
